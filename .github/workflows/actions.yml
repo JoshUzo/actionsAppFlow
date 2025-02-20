@@ -1,0 +1,57 @@
+name: Trigger AWS AppFlow
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
+
+jobs:
+  trigger_appflow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt update
+          sudo apt install -y awscli
+          aws --version
+
+      - name: Start AWS AppFlow
+        id: start_flow
+        run: |
+          response=$(aws appflow start-flow --flow-name SalesforceToS3Flow)
+          echo "Response: $response"
+
+      - name: Wait and Check AppFlow Status
+        run: |
+          flow_name="SalesforceToS3Flow"
+          while true; do
+            status=$(aws appflow describe-flow-execution-records --flow-name "$flow_name" --query 'flowExecutions[0].executionStatus' --output text)
+            echo "Current Flow Status: $status"
+            if [[ "$status" == "Successful" ]]; then
+              echo "Flow completed successfully!"
+              exit 0
+            elif [[ "$status" == "Error" ]]; then
+              echo "Flow execution failed!"
+              exit 1
+            fi
+            sleep 30
+          done
+
+  trigger_lambda:
+    needs: trigger_appflow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke Lambda for Data Processing (Optional)
+        run: |
+          aws lambda invoke \
+            --function-name processSalesforceData \
+            --payload '{}' \
+            response.json
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: Show Lambda Response
+        run: cat response.json
