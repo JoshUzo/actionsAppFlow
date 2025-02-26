@@ -31,5 +31,5 @@ jobs:
       - name: Start AWS AppFlow
         run: |
           aws appflow start-flow \
-            --flow-name "SalesforceToS3Flow" 
+            --flow-name "SalesforceAppFlow-Test" 
 
